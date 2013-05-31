@@ -35,12 +35,26 @@ class AdministratorTests(unittest.TestCase):
 
       self.assertGreater(row[0], 0)
 
-  # def test_db_has_administrator_table(self):
-  #   """
-  #   Ensure there's an administrator table in the DATABASE
-  #   """
-  #   with administrator.connect_db() as db:
-  #     c = db.cursor()
-  #     c.execute("SELECT * FROM sqlite_master;")
-  #     rows = ','.join(c.fetchall())
-  #     self.assertRegexpMatches(rows, ".*table\|administrators\|.*")
+  def test_db_has_administrator_table(self):
+    """
+    Ensure administrator table in the DATABASE
+    """
+    with administrator.connect_db() as db:
+      c = db.cursor()
+      c.execute("""SELECT COUNT(name) FROM sqlite_master 
+        WHERE type='table' AND name='administrators';""")
+
+      row = c.fetchone()
+      self.assertEqual(row[0], 1)
+
+  def test_db_has_administrator_table(self):
+    """
+    Ensure jobs table in the DATABASE
+    """
+    with administrator.connect_db() as db:
+      c = db.cursor()
+      c.execute("""SELECT COUNT(name) FROM sqlite_master 
+        WHERE type='table' AND name='jobs';""")
+
+      row = c.fetchone()
+      self.assertEqual(row[0], 1)

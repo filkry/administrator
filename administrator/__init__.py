@@ -21,10 +21,13 @@ transactions if one does not already exist
 """
 
 def init_db():
-  return None
+  with connect_db() as db:
+    with app.open_resource('schema/administrator.sql') as f:
+      db.cursor().executescript(f.read())
+    db.commit()
 
 def connect_db():
-  return sqlite3.connect(DATABASE)
+  return sqlite3.connect(app.config['DATABASE'])
 
 @app.before_request
 def before_request():

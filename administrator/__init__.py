@@ -1,4 +1,5 @@
 from flask import Flask
+from contextlib import closing
 import sqlite3
 app = Flask(__name__)
 
@@ -21,27 +22,37 @@ transactions if one does not already exist
 """
 
 def init_db():
-  with connect_db() as db:
-    with app.open_resource('schema/administrator.sql') as f:
-      db.cursor().executescript(f.read())
-    db.commit()
+    """Creates the database tables."""
+    with app.app_context():
+        db = get_db()
+        with app.open_resource('schema/administrator.sql', mode='r') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
 
-def connect_db():
-  return sqlite3.connect(app.config['DATABASE'])
 
-@app.before_request
-def before_request():
-  g.db = connect_db()
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    top = _app_ctx_stack.top
+    if not hasattr(top, 'sqlite_db'):
+        sqlite_db = sqlite3.connect(app.config['DATABASE'])
+        sqlite_db.row_factory = sqlite3.Row
+        top.sqlite_db = sqlite_db
 
-@app.teardown_request
-def teardown_request(exception):
-  if hasattr(g, 'db'):
-    g.db.close()
+    return top.sqlite_db
+
+@app.teardown_appcontext
+def close_db_connection(exception):
+    """Closes the database again at the end of the request."""
+    top = _app_ctx_stack.top
+    if hasattr(top, 'sqlite_db'):
+        top.sqlite_db.close()
 
 """
 Add jobs to the db
 """
 
-@app.route("/")
-def hello():
-  return "Hello World!"
+@app.route("/add", methods=['GET'])
+def add():
+    return "Password invalid"

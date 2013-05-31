@@ -44,5 +44,7 @@ class AdministratorTests(unittest.TestCase):
             {"job_secret": "c"}], "fake_password")
         log.debug(rv.data)
 
-        if __name__ == '__main__':
-          unittest.main()
+
+
+if __name__ == '__main__':
+    unittest.main()

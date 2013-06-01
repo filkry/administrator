@@ -127,7 +127,14 @@ def confirm():
         id=? and status='pending'", (aid, job_id))
 
     if c.fetchone()[0] != 1:
-        return "Job not confirmed; does not exist or not taken"
+        return "Job not confirmed; does not exist, not taken, or already complete"
+
+    c.execute("UPDATE jobs SET status='complete' \
+        WHERE administrator_id=? and \
+        id=? and status='pending'", (aid, job_id))
+
+    c.execute("COMMIT")
+    db.commit()
 
     return "Job confirmed complete"
 

@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS jobs (
 	administrator_id TEXT,
 	json TEXT,
     status TEXT,
+    claimant_uuid TEXT,
 	FOREIGN KEY(administrator_id) REFERENCES administrators(id)
 );

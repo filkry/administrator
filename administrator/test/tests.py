@@ -14,18 +14,24 @@ class AdministratorTests(unittest.TestCase):
     Request convenience methods
     """
 
-    def add_jobs(self, jobs, admin_id, password):
-        return self.app.post('/add', data=dict(
+    def add_jobs(self, jobs, admin_id, password, app = None):
+        if app is None:
+            app = self.app
+        return app.post('/add', data=dict(
           jobs=json.dumps(jobs),
           administrator_id=admin_id,
           password=password), follow_redirects=True)
 
-    def get_job(self, admin_id):
-        return self.app.post('/get', data=dict(
+    def get_job(self, admin_id, app = None):
+        if app is None:
+            app = self.app
+        return app.post('/get', data=dict(
             administrator_id=admin_id))
 
-    def confirm_job(self, admin_id, job_id):
-        return self.app.post('/confirm', data=dict(
+    def confirm_job(self, admin_id, job_id, app = None):
+        if app is None:
+            app = self.app
+        return app.post('/confirm', data=dict(
             administrator_id=admin_id,
             job_id = job_id))
 
@@ -45,6 +51,7 @@ class AdministratorTests(unittest.TestCase):
         self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
         administrator.app.config['TESTING'] = True
         administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
+        administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
         self.app = administrator.app.test_client()
         administrator.init_db()
 
@@ -101,16 +108,30 @@ class AdministratorTests(unittest.TestCase):
         rv = self.get_job(self.abc_aid)
         job_id = json.loads(rv.data)['job_id']
 
+        # Can confirm a job you own
         rv = self.confirm_job(self.abc_aid, job_id)
         self.assertIn("Job confirmed complete", rv.data)
 
+        # Cannot confirm same job twice
         rv = self.confirm_job(self.abc_aid, job_id)
-        self.assertIn("Job not confirmed; does not exist, not taken, or already complete", rv.data)
+        self.assertIn("Job confirm failed", rv.data)
 
+        # Cannot confirm a job that doesn't exist
         rv = self.confirm_job(self.abc_aid, '12345')
-        self.assertIn("Job not confirmed; does not exist, not taken, or already complete", rv.data)
+        self.assertIn("Job confirm failed", rv.data)
 
-    # def test_confirm_unowned_job(self):
+    def test_confirm_unowned_job(self):
+        app2 = administrator.app.test_client()
+
+        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+
+        rv = self.get_job(self.abc_aid, app2)
+        job_id = json.loads(rv.data)['job_id']
+
+        rv = self.confirm_job(self.abc_aid, job_id)
+        self.assertNotIn("Job confirmed complete", rv.data)
+        self.assertIn("Job confirm failed", rv.data)
+
 
     # def test_timeout_job
 

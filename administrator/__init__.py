@@ -4,6 +4,7 @@ from contextlib import closing
 import sqlite3
 import md5
 import json
+import uuid
 app = Flask(__name__)
 
 """
@@ -12,6 +13,7 @@ Embedded config
 
 DATABASE = '~/administrator.db'
 PASSWORD_HASH = md5.new('fancy').digest()
+SECRET_KEY = md5.new('fancy').digest()
 
 """
 Set up as app
@@ -101,11 +103,16 @@ def get():
         c.execute("COMMIT")
         return "No jobs available"
 
+    if not 'user_id' in session:
+        session['user_id'] = uuid.uuid4().hex
+
     job_id, payload = c_res[0], c_res[1]
-    c.execute("UPDATE jobs SET status='pending' \
-        WHERE id=?;", (job_id, ))
+    c.execute("UPDATE jobs SET status='pending', claimant_uuid=? \
+        WHERE id=?;", (session['user_id'], job_id))
     c.execute("COMMIT")
     db.commit()
+
+    
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -121,13 +128,19 @@ def confirm():
     aid = request.form['administrator_id']
     job_id = request.form['job_id']
 
+    if not 'user_id' in session:
+        return "Job confirm failed. Job does not exist, was not begun, \
+            already complete, or belongs to another user"
+
     c.execute("BEGIN")
     c.execute("SELECT COUNT(*) FROM jobs \
         WHERE administrator_id=? and \
-        id=? and status='pending'", (aid, job_id))
+        id=? and status='pending' and \
+        claimant_uuid=?", (aid, job_id, session['user_id']))
 
     if c.fetchone()[0] != 1:
-        return "Job not confirmed; does not exist, not taken, or already complete"
+        return "Job confirm failed. Job does not exist, was not begun, \
+            already complete, or belongs to another user"
 
     c.execute("UPDATE jobs SET status='complete' \
         WHERE administrator_id=? and \

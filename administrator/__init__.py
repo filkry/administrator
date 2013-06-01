@@ -106,5 +106,14 @@ def get():
         WHERE id=?;", (job_id, ))
     c.execute("COMMIT")
     db.commit()
-    return jsonify(json.loads(payload))
+
+    payload = json.loads(payload)
+    resp = {'job_id': job_id,
+            'payload': payload}
+
+    return jsonify(resp)
+
+@app.route("/confirm", methods=['Post'])
+def confirm():
+    return "Job confirmed complete"
 

@@ -24,6 +24,11 @@ class AdministratorTests(unittest.TestCase):
         return self.app.post('/get', data=dict(
             administrator_id=admin_id))
 
+    def confirm_job(self, admin_id, job_id):
+        return self.app.post('/confirm', data=dict(
+            administrator_id=admin_id,
+            job_id = job_id))
+
     """
     Re-usable structs
     """
@@ -74,7 +79,7 @@ class AdministratorTests(unittest.TestCase):
         log.debug("get_job response payload is '%s'", rv.data)
         self.assertEqual(rv.mimetype, 'application/json')
 
-        payload = json.loads(rv.data)
+        payload = json.loads(rv.data)["payload"]
         self.assertIn(payload["job_secret"], "abc")
 
     def test_exhaust_jobs(self):
@@ -90,6 +95,18 @@ class AdministratorTests(unittest.TestCase):
         rv = self.get_job(self.abc_aid)
         self.assertIn("No jobs available", rv.data)
 
+    def test_confirm_job(self):
+        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        
+        rv = self.get_job(self.abc_aid)
+        job_id = json.loads(rv.data)['job_id']
+
+        rv = self.confirm_job(self.abc_aid, job_id)
+        self.assertIn("Job confirmed complete", rv.data)
+
+    # def test_confirm_unowned_job(self):
+
+    # def test_timeout_job
 
 if __name__ == '__main__':
     unittest.main()

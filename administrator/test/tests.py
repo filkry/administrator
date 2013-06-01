@@ -7,6 +7,48 @@ import sys
 import json
 import md5
 import time
+import threading
+
+
+"""
+Re-usable structs
+"""
+abc_jobs = [{"job_secret": "a"},
+            {"job_secret": "b"},
+            {"job_secret": "c"}]
+abc_aid = "abc"
+
+"""
+Helper classes
+"""
+
+class HelperApp():
+    def __init__(self, admin_id):
+        self.app = administrator.app.test_client()
+        self.admin_id = admin_id
+
+    def add_jobs(self, jobs, password, timeout=600):
+        return self.app.post('/add', data=dict(
+          jobs=json.dumps(jobs),
+          administrator_id=self.admin_id,
+          timeout=timeout,
+          password=password), follow_redirects=True)
+
+    def get_job(self):
+        return self.app.post('/get', data=dict(
+            administrator_id=self.admin_id))
+
+    def confirm_job(self, job_id):
+        return self.app.post('/confirm', data=dict(
+            administrator_id=self.admin_id,
+            job_id = job_id))
+
+# class Worker(threading.Thread):
+#     def __init__(self, job_time):
+#         self.app = administrator.app.test_client()
+
+#     def run(self):
+#         get_job()
 
 class AdministratorTests(unittest.TestCase):
 
@@ -16,42 +58,7 @@ class AdministratorTests(unittest.TestCase):
         * we always receive well-formed input
         * users may accidentely quit a session, but will not switch computers
     """
-
-
-    """
-    Request convenience methods
-    """
-
-    def add_jobs(self, jobs, admin_id, password, app = None, timeout=600):
-        if app is None:
-            app = self.app
-        return app.post('/add', data=dict(
-          jobs=json.dumps(jobs),
-          administrator_id=admin_id,
-          timeout=timeout,
-          password=password), follow_redirects=True)
-
-    def get_job(self, admin_id, app = None):
-        if app is None:
-            app = self.app
-        return app.post('/get', data=dict(
-            administrator_id=admin_id))
-
-    def confirm_job(self, admin_id, job_id, app = None):
-        if app is None:
-            app = self.app
-        return app.post('/confirm', data=dict(
-            administrator_id=admin_id,
-            job_id = job_id))
-
-    """
-    Re-usable structs
-    """
-    abc_aid = "abc"
-    abc_jobs = [{"job_secret": "a"},
-                {"job_secret": "b"},
-                {"job_secret": "c"}]
-
+    
     """
     Test setUp
     """
@@ -61,7 +68,7 @@ class AdministratorTests(unittest.TestCase):
         administrator.app.config['TESTING'] = True
         administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
         administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
-        self.app = administrator.app.test_client()
+        self.app = HelperApp(abc_aid)
         administrator.init_db()
 
         # Set up logging if you want
@@ -74,23 +81,23 @@ class AdministratorTests(unittest.TestCase):
 
     def test_add_jobs_password(self):
         log = logging.getLogger( "AdministratorTests.test_db_has_administrator_table")
-        rv = self.add_jobs(self.abc_jobs, self.abc_aid, "fake_password")
+        rv = self.app.add_jobs(abc_jobs, "fake_password")
         self.assertIn("Password invalid", rv.data)
 
-        rv = self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        rv = self.app.add_jobs(abc_jobs, "real_password")
         self.assertIn("Jobs added", rv.data)
 
     def test_get_job_empty(self):
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertIn("No jobs available", rv.data)
 
     def test_get_job(self):
         log = logging.getLogger( "AdministratorTests.test_get_job")
         
-        rv = self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        rv = self.app.add_jobs(abc_jobs, "real_password")
 
-        log.debug("abc_aid = %s", self.abc_aid)
-        rv = self.get_job(self.abc_aid)
+        log.debug("abc_aid = %s", abc_aid)
+        rv = self.app.get_job()
         log.debug("get_job response mimetype is '%s'", rv.mimetype)
         log.debug("get_job response payload is '%s'", rv.data)
         self.assertEqual(rv.mimetype, 'application/json')
@@ -99,52 +106,52 @@ class AdministratorTests(unittest.TestCase):
         self.assertIn(payload["job_secret"], "abc")
 
     def test_exhaust_jobs(self):
-        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        self.app.add_jobs(abc_jobs, "real_password")
         
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
 
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertIn("No jobs available", rv.data)
 
     def test_confirm_job(self):
-        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        self.app.add_jobs(abc_jobs, "real_password")
         
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         job_id = json.loads(rv.data)['job_id']
 
         # Can confirm a job you own
-        rv = self.confirm_job(self.abc_aid, job_id)
+        rv = self.app.confirm_job(job_id)
         self.assertIn("Job confirmed complete", rv.data)
 
         # Cannot confirm same job twice
-        rv = self.confirm_job(self.abc_aid, job_id)
+        rv = self.app.confirm_job(job_id)
         self.assertIn("Job confirm failed", rv.data)
 
         # Cannot confirm a job that doesn't exist
-        rv = self.confirm_job(self.abc_aid, '12345')
+        rv = self.app.confirm_job('12345')
         self.assertIn("Job confirm failed", rv.data)
 
     def test_confirm_unowned_job(self):
-        app2 = administrator.app.test_client()
+        app2 = HelperApp(abc_aid)
 
-        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        self.app.add_jobs(abc_jobs, "real_password")
 
-        rv = self.get_job(self.abc_aid, app2)
+        rv = app2.get_job()
         job_id = json.loads(rv.data)['job_id']
 
         # Can't confirm job when we don't have any
-        rv = self.confirm_job(self.abc_aid, job_id)
+        rv = self.app.confirm_job(job_id)
         self.assertNotIn("Job confirmed complete", rv.data)
         self.assertIn("Job confirm failed", rv.data)
 
         # Can't confirm someone else's job
-        self.get_job(self.abc_aid)
-        rv = self.confirm_job(self.abc_aid, job_id)
+        self.app.get_job()
+        rv = self.app.confirm_job(job_id)
         self.assertNotIn("Job confirmed complete", rv.data)
         self.assertIn("Job confirm failed", rv.data)
 
@@ -153,17 +160,17 @@ class AdministratorTests(unittest.TestCase):
         Test that we can get a job after timeout
         """
 
-        self.add_jobs(self.abc_jobs, self.abc_aid,
+        self.app.add_jobs(abc_jobs,
             "real_password", timeout=5)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
 
         time.sleep(10)
-        rv = self.get_job(self.abc_aid)
+        rv = self.app.get_job()
         self.assertNotIn("Job confirm failed", rv.data)
 
 

@@ -103,7 +103,7 @@ def expire_jobs(db):
 @app.route("/get", methods=['Post'])
 def get():
     if not 'user_id' in session:
-            session['user_id'] = uuid.uuid4().hex
+        session['user_id'] = uuid.uuid4().hex
 
     aid = request.form['administrator_id']
 
@@ -141,32 +141,24 @@ def get():
 
 @app.route("/confirm", methods=['Post'])
 def confirm():
+    if not 'user_id' in session:
+        session['user_id'] = uuid.uuid4().hex
+
     db = get_db()
     c = db.cursor()
 
     aid = request.form['administrator_id']
     job_id = request.form['job_id']
-
-    if not 'user_id' in session:
-        return "Job confirm failed. Job does not exist, was not begun, \
-            already complete, or belongs to another user"
-
-    c.execute("BEGIN")
-    c.execute("SELECT COUNT(*) FROM jobs \
-        WHERE administrator_id=? and \
-        id=? and status='pending' and \
-        claimant_uuid=?", (aid, job_id, session['user_id']))
-
-    if c.fetchone()[0] != 1:
-        return "Job confirm failed. Job does not exist, was not begun, \
-            already complete, timed out, or belongs to another user"
-
+        
     c.execute("UPDATE jobs SET status='complete' \
         WHERE administrator_id=? and \
         id=? and status='pending' and \
         claimant_uuid=?", (aid, job_id, session['user_id']))
 
-    c.execute("COMMIT")
+    if c.rowcount != 1:
+        return "Job confirm failed. Job does not exist, was not begun, \
+            already complete, timed out, or belongs to another user"
+
     db.commit()
 
     return "Job confirmed complete"

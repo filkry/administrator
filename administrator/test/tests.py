@@ -77,6 +77,19 @@ class AdministratorTests(unittest.TestCase):
         payload = json.loads(rv.data)
         self.assertIn(payload["job_secret"], "abc")
 
+    def test_exhaust_jobs(self):
+        self.add_jobs(self.abc_jobs, self.abc_aid, "real_password")
+        
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+
+        rv = self.get_job(self.abc_aid)
+        self.assertIn("No jobs available", rv.data)
+
 
 if __name__ == '__main__':
     unittest.main()

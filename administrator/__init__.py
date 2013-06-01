@@ -1,8 +1,9 @@
 from flask import Flask, request, session, g, redirect, url_for, abort, \
-     render_template, flash, _app_ctx_stack
+     render_template, flash, _app_ctx_stack, jsonify
 from contextlib import closing
 import sqlite3
 import md5
+import json
 app = Flask(__name__)
 
 """
@@ -10,7 +11,7 @@ Embedded config
 """
 
 DATABASE = '~/administrator.db'
-PASSWORD_HASH = md5.new('real_password').digest()
+PASSWORD_HASH = md5.new('fancy').digest()
 
 """
 Set up as app
@@ -51,7 +52,8 @@ def get_db():
     """
     top = _app_ctx_stack.top
     if not hasattr(top, 'sqlite_db'):
-        sqlite_db = sqlite3.connect(app.config['DATABASE'])
+        sqlite_db = sqlite3.connect(app.config['DATABASE'],
+                                    isolation_level=None)
         sqlite_db.row_factory = sqlite3.Row
         top.sqlite_db = sqlite_db
 
@@ -71,6 +73,38 @@ Add jobs to the db
 @app.route("/add", methods=['POST'])
 def add():
     if hash_password(request.form['password']) == app.config['PASSWORD_HASH']:
+        jobs = json.loads(request.form['jobs'])
+        insert_tuples = [(request.form['administrator_id'],
+                          json.dumps(j)) for j in jobs]
+        db = get_db()
+        c = db.cursor()
+        c.executemany("INSERT INTO jobs (administrator_id, json, status) \
+            VALUES (?, ?, 'ready')", insert_tuples)
+        db.commit()
         return "Jobs added"
     else:
         return "Password invalid"
+
+@app.route("/get", methods=['Post'])
+def get():
+    db = get_db()
+    c = db.cursor()
+    aid = request.form['administrator_id']
+    c.execute("BEGIN")
+    c.execute("SELECT id, json FROM jobs \
+        WHERE administrator_id=? and status='ready' \
+        ORDER BY RANDOM() LIMIT 1;", (aid, ))
+
+    c_res = c.fetchone()
+
+    if c_res is None:
+        c.execute("COMMIT")
+        return "No jobs available"
+
+    job_id, payload = c_res[0], c_res[1]
+    c.execute("UPDATE jobs SET status='pending' \
+        WHERE id=?;", (job_id, ))
+    c.execute("COMMIT")
+    db.commit()
+    return jsonify(json.loads(payload))
+

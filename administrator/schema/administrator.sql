@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS administrators (
 
 CREATE TABLE IF NOT EXISTS jobs (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	administrator_id INTEGER,
+	administrator_id TEXT,
 	json TEXT,
+    status TEXT,
 	FOREIGN KEY(administrator_id) REFERENCES administrators(id)
 );

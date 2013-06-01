@@ -6,6 +6,7 @@ import administrator
 import sys
 import json
 import md5
+import time
 
 class AdministratorTests(unittest.TestCase):
 
@@ -21,12 +22,13 @@ class AdministratorTests(unittest.TestCase):
     Request convenience methods
     """
 
-    def add_jobs(self, jobs, admin_id, password, app = None):
+    def add_jobs(self, jobs, admin_id, password, app = None, timeout=600):
         if app is None:
             app = self.app
         return app.post('/add', data=dict(
           jobs=json.dumps(jobs),
           administrator_id=admin_id,
+          timeout=timeout,
           password=password), follow_redirects=True)
 
     def get_job(self, admin_id, app = None):
@@ -146,8 +148,25 @@ class AdministratorTests(unittest.TestCase):
         self.assertNotIn("Job confirmed complete", rv.data)
         self.assertIn("Job confirm failed", rv.data)
 
+    def test_timout_success(self):
+        """
+        Test that we can get a job after timeout
+        """
 
-    # def test_timeout_job
+        self.add_jobs(self.abc_jobs, self.abc_aid,
+            "real_password", timeout=5)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("No jobs available", rv.data)
+
+        time.sleep(10)
+        rv = self.get_job(self.abc_aid)
+        self.assertNotIn("Job confirm failed", rv.data)
+
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,6 +1,7 @@
 from flask import Flask, request, session, g, redirect, url_for, abort, \
      render_template, flash, _app_ctx_stack, jsonify
-from contextlib import closing
+from contextlib import closing # TODO: remove this?
+from datetime import datetime, timedelta
 import sqlite3
 import md5
 import json
@@ -76,24 +77,42 @@ Add jobs to the db
 def add():
     if hash_password(request.form['password']) == app.config['PASSWORD_HASH']:
         jobs = json.loads(request.form['jobs'])
+        timeout = request.form['timeout']
         insert_tuples = [(request.form['administrator_id'],
-                          json.dumps(j)) for j in jobs]
+                          json.dumps(j),
+                          timeout) for j in jobs]
         db = get_db()
         c = db.cursor()
-        c.executemany("INSERT INTO jobs (administrator_id, json, status) \
-            VALUES (?, ?, 'ready')", insert_tuples)
+        c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+            VALUES (?, ?, ?, 'ready')", insert_tuples)
         db.commit()
         return "Jobs added"
     else:
         return "Password invalid"
 
+
+def expire_jobs(db):
+    timestamp = datetime.utcnow()
+    c = db.cursor()
+    c.execute("UPDATE jobs SET status='ready'  \
+        WHERE status='pending' and expire_time < ?",
+        (timestamp,))
+    db.commit()
+
+
 @app.route("/get", methods=['Post'])
 def get():
-    db = get_db()
-    c = db.cursor()
+    if not 'user_id' in session:
+            session['user_id'] = uuid.uuid4().hex
+
     aid = request.form['administrator_id']
+
+    db = get_db()
+    expire_jobs(db)
+
+    c = db.cursor()   
     c.execute("BEGIN")
-    c.execute("SELECT id, json FROM jobs \
+    c.execute("SELECT id, json, timeout FROM jobs \
         WHERE administrator_id=? and status='ready' \
         ORDER BY RANDOM() LIMIT 1;", (aid, ))
 
@@ -103,16 +122,16 @@ def get():
         c.execute("COMMIT")
         return "No jobs available"
 
-    if not 'user_id' in session:
-        session['user_id'] = uuid.uuid4().hex
+    job_id, payload, timeout = c_res
+    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
 
-    job_id, payload = c_res[0], c_res[1]
-    c.execute("UPDATE jobs SET status='pending', claimant_uuid=? \
-        WHERE id=?;", (session['user_id'], job_id))
+    c.execute("UPDATE jobs SET status='pending', \
+        claimant_uuid=?, expire_time=? \
+        WHERE id=?;", (session['user_id'],
+                       expire_time,
+                       job_id))
     c.execute("COMMIT")
     db.commit()
-
-    
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -140,11 +159,12 @@ def confirm():
 
     if c.fetchone()[0] != 1:
         return "Job confirm failed. Job does not exist, was not begun, \
-            already complete, or belongs to another user"
+            already complete, timed out, or belongs to another user"
 
     c.execute("UPDATE jobs SET status='complete' \
         WHERE administrator_id=? and \
-        id=? and status='pending'", (aid, job_id))
+        id=? and status='pending' and \
+        claimant_uuid=?", (aid, job_id, session['user_id']))
 
     c.execute("COMMIT")
     db.commit()

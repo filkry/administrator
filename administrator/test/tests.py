@@ -104,6 +104,10 @@ class AdministratorTests(unittest.TestCase):
         rv = self.confirm_job(self.abc_aid, job_id)
         self.assertIn("Job confirmed complete", rv.data)
 
+    def test_confirm_fake_job(self):
+        rv = self.confirm_job(self.abc_aid, '12345')
+        self.assertIn("Job not confirmed; does not exist or not taken", rv.data)
+
     # def test_confirm_unowned_job(self):
 
     # def test_timeout_job

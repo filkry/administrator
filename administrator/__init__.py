@@ -115,5 +115,19 @@ def get():
 
 @app.route("/confirm", methods=['Post'])
 def confirm():
+    db = get_db()
+    c = db.cursor()
+
+    aid = request.form['administrator_id']
+    job_id = request.form['job_id']
+
+    c.execute("BEGIN")
+    c.execute("SELECT COUNT(*) FROM jobs \
+        WHERE administrator_id=? and \
+        id=? and status='pending'", (aid, job_id))
+
+    if c.fetchone()[0] != 1:
+        return "Job not confirmed; does not exist or not taken"
+
     return "Job confirmed complete"
 

@@ -128,6 +128,13 @@ class AdministratorTests(unittest.TestCase):
         rv = self.get_job(self.abc_aid, app2)
         job_id = json.loads(rv.data)['job_id']
 
+        # Can't confirm job when we don't have any
+        rv = self.confirm_job(self.abc_aid, job_id)
+        self.assertNotIn("Job confirmed complete", rv.data)
+        self.assertIn("Job confirm failed", rv.data)
+
+        # Can't confirm someone else's job
+        self.get_job(self.abc_aid)
         rv = self.confirm_job(self.abc_aid, job_id)
         self.assertNotIn("Job confirmed complete", rv.data)
         self.assertIn("Job confirm failed", rv.data)

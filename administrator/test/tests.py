@@ -9,6 +9,13 @@ import md5
 
 class AdministratorTests(unittest.TestCase):
 
+    """
+    Assumptions we make in these tests due to the limited
+    scope of the project:
+        * we always receive well-formed input
+        * users may accidentely quit a session, but will not switch computers
+    """
+
 
     """
     Request convenience methods

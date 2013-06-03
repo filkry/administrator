@@ -47,14 +47,17 @@ class HelperApp():
             job_id = job_id))
 
 class Worker(threading.Thread):
-    def __init__(self, admin_id, job_time):
+    def __init__(self, admin_id, job_time, start_time = 0):
         super(Worker, self).__init__()
         self.app = HelperApp(admin_id)
         self.job_time = job_time
+        self.start_time = start_time
         self.success = False
         self.reason = None
 
     def run(self):
+        time.sleep(self.start_time)
+
         rv = self.app.get_job()
         if not rv.mimetype == 'application/json':
             self.reason = rv.data

@@ -18,6 +18,9 @@ abc_jobs = [{"job_secret": "a"},
             {"job_secret": "c"}]
 abc_aid = "abc"
 
+def gen_n_jobs(n):
+    return [{"job_secret": x} for x in range(n)]
+
 """
 Helper classes
 """
@@ -43,12 +46,28 @@ class HelperApp():
             administrator_id=self.admin_id,
             job_id = job_id))
 
-# class Worker(threading.Thread):
-#     def __init__(self, job_time):
-#         self.app = administrator.app.test_client()
+class Worker(threading.Thread):
+    def __init__(self, admin_id, job_time):
+        super(Worker, self).__init__()
+        self.app = HelperApp(admin_id)
+        self.job_time = job_time
+        self.success = False
+        self.reason = None
 
-#     def run(self):
-#         get_job()
+    def run(self):
+        rv = self.app.get_job()
+        if not rv.mimetype == 'application/json':
+            self.reason = rv.data
+            return
+
+        job_id = json.loads(rv.data)['job_id']
+
+        if self.job_time >= 0:
+            time.sleep(self.job_time)
+            rv = self.app.confirm_job(job_id)
+            self.success = "Job confirmed complete" in rv.data
+            if not self.success:
+                self.reason = rv.data
 
 class AdministratorTests(unittest.TestCase):
 
@@ -173,6 +192,56 @@ class AdministratorTests(unittest.TestCase):
         rv = self.app.get_job()
         self.assertNotIn("Job confirm failed", rv.data)
 
+    def test_many_workers(self):
+        many = 25
+        self.app.add_jobs(gen_n_jobs(many), "real_password")
+        workers = [Worker(abc_aid, 1) for i in range(many)]
+        for w in workers:
+            w.start()
+
+        [w.join() for w in workers]
+
+        self.assertListEqual([w.success for w in workers],
+                             [True for w in workers])
+
+    def test_many_workers_fail_replace(self):
+        many = 24 # must be even
+        self.app.add_jobs(gen_n_jobs(many), "real_password", timeout=10)
+
+        # workers should finish quickly and on time
+        fast_workers = [Worker(abc_aid, 1) for i in range(many/2)]
+
+        # workers that will leave and never finish
+        slow_workers = [Worker(abc_aid, -1) for i in range(many/2)]
+
+        for w in fast_workers + slow_workers:
+            w.start()
+        [w.join() for w in fast_workers + slow_workers]
+
+        # workers should be rejected with no jobs available
+        rejected_workers = [Worker(abc_aid, 1) for i in range(many/2)]
+
+        for w in rejected_workers:
+            w.start()
+        [w.join() for w in rejected_workers]
+
+        self.assertListEqual([w.success for w in fast_workers],
+                             [True for w in fast_workers])
+        self.assertListEqual([w.success for w in rejected_workers],
+                             [False for w in rejected_workers])
+
+        # wait for jobs to expire
+        time.sleep(10)
+
+        # workers should get jobs now that slow_workers have expired
+        replacement_workers = [Worker(abc_aid, 1) for i in range(many/2)]
+        for w in replacement_workers:
+            w.start()
+
+        [w.join() for w in replacement_workers]
+
+        self.assertListEqual([w.success for w in replacement_workers],
+                             [True for w in replacement_workers])
 
 
 if __name__ == '__main__':

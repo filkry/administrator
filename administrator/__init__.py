@@ -13,7 +13,7 @@ app = Flask(__name__)
 Embedded config
 """
 
-DATABASE = '~/administrator.db'
+DATABASE = '/tmp/administrator.db'
 PASSWORD_HASH = md5.new('fancy').digest()
 SECRET_KEY = md5.new('fancy').digest()
 

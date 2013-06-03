@@ -83,6 +83,10 @@ def close_db_connection(exception):
 Add jobs to the db
 """
 
+@app.route("/")
+def hello_world():
+    return "Hello world"
+
 @app.route("/add", methods=['POST'])
 def add():
     if hash_password(request.form['password']) == app.config['PASSWORD_HASH']:
@@ -113,8 +117,8 @@ def expire_jobs(db):
             c.execute("UPDATE jobs SET status='ready'  \
                 WHERE status='pending' and expire_time < ?",
                 (timestamp,))
-        except:
-            print "Unexpected error expire"
+        except Exception,e:
+            print str(e)
 
 
 @app.route("/get", methods=['Post'])
@@ -129,19 +133,22 @@ def get():
 
     with get_lock:
         with closing(db.cursor()) as c:
-            c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
+            try:
+                c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                    and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
 
-            c_res = c.fetchone()
-            if c_res is None:
-                return "No jobs available"
+                c_res = c.fetchone()
+                if c_res is None:
+                    return "No jobs available"
 
-            job_id, payload, timeout = c_res
-            expire_time = datetime.utcnow() + timedelta(seconds=timeout)
-            
-            c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
-                        expire_time=? WHERE id = ?",
-                        (session['user_id'], expire_time, job_id))
+                job_id, payload, timeout = c_res
+                expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+                
+                c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
+                            expire_time=? WHERE id = ?",
+                            (session['user_id'], expire_time, job_id))
+            except Exception,e:
+                print str(e)
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -174,4 +181,5 @@ def confirm():
     return "Job confirmed complete"
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0')
+    app.run()
+    app.init_db()

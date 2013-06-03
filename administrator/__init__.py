@@ -82,10 +82,11 @@ def add():
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
-        c = db.cursor()
-        c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
-            VALUES (?, ?, ?, 'ready')", insert_tuples)
-        db.commit()
+
+        with closing(db.cursor()) as c:
+            c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+                VALUES (?, ?, ?, 'ready')", insert_tuples)
+        
         return "Jobs added"
     else:
         return "Password invalid"
@@ -93,11 +94,11 @@ def add():
 
 def expire_jobs(db):
     timestamp = datetime.utcnow()
-    c = db.cursor()
-    c.execute("UPDATE jobs SET status='ready'  \
-        WHERE status='pending' and expire_time < ?",
-        (timestamp,))
-    db.commit()
+    
+    with closing(db.cursor()) as c:
+        c.execute("UPDATE jobs SET status='ready'  \
+            WHERE status='pending' and expire_time < ?",
+            (timestamp,))
 
 
 @app.route("/get", methods=['Post'])
@@ -110,28 +111,24 @@ def get():
     db = get_db()
     expire_jobs(db)
 
-    c = db.cursor()   
-    c.execute("BEGIN")
-    c.execute("SELECT id, json, timeout FROM jobs \
-        WHERE administrator_id=? and status='ready' \
-        ORDER BY RANDOM() LIMIT 1;", (aid, ))
+    with closing(db.cursor()) as c:
+        c.execute("SELECT id, json, timeout FROM jobs \
+            WHERE administrator_id=? and status='ready' \
+            ORDER BY RANDOM() LIMIT 1;", (aid, ))
 
-    c_res = c.fetchone()
+        c_res = c.fetchone()
 
-    if c_res is None:
-        c.execute("COMMIT")
-        return "No jobs available"
+        if c_res is None:
+            return "No jobs available"
 
-    job_id, payload, timeout = c_res
-    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+        job_id, payload, timeout = c_res
+        expire_time = datetime.utcnow() + timedelta(seconds=timeout)
 
-    c.execute("UPDATE jobs SET status='pending', \
-        claimant_uuid=?, expire_time=? \
-        WHERE id=?;", (session['user_id'],
-                       expire_time,
-                       job_id))
-    c.execute("COMMIT")
-    db.commit()
+        c.execute("UPDATE jobs SET status='pending', \
+            claimant_uuid=?, expire_time=? \
+            WHERE id=?;", (session['user_id'],
+                           expire_time,
+                           job_id))
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -144,22 +141,19 @@ def confirm():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
-    db = get_db()
-    c = db.cursor()
-
     aid = request.form['administrator_id']
     job_id = request.form['job_id']
-        
-    c.execute("UPDATE jobs SET status='complete' \
-        WHERE administrator_id=? and \
-        id=? and status='pending' and \
-        claimant_uuid=?", (aid, job_id, session['user_id']))
 
-    if c.rowcount != 1:
-        return "Job confirm failed. Job does not exist, was not begun, \
-            already complete, timed out, or belongs to another user"
+    db = get_db()
+    with closing(db.cursor()) as c:
+        c.execute("UPDATE jobs SET status='complete' \
+            WHERE administrator_id=? and \
+            id=? and status='pending' and \
+            claimant_uuid=?", (aid, job_id, session['user_id']))
 
-    db.commit()
+        if c.rowcount != 1:
+            return "Job confirm failed. Job does not exist, was not begun, \
+                already complete, timed out, or belongs to another user"
 
     return "Job confirmed complete"
 

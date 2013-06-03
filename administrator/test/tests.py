@@ -8,6 +8,7 @@ import json
 import md5
 import time
 import threading
+from random import randint
 
 
 """
@@ -245,6 +246,16 @@ class AdministratorTests(unittest.TestCase):
 
         self.assertListEqual([w.success for w in replacement_workers],
                              [True for w in replacement_workers])
+
+    def test_random_no_exceptions(self):
+        many = 100
+        workers = [Worker(abc_aid, randint(0, many), randint(0, many)) for i in range(many)]
+
+        for w in workers:
+            w.start()
+
+        for w in workers:
+            w.join()
 
 
 if __name__ == '__main__':

@@ -6,6 +6,7 @@ import sqlite3
 import md5
 import json
 import uuid
+import threading
 app = Flask(__name__)
 
 """
@@ -22,6 +23,15 @@ Set up as app
 app = Flask(__name__)
 app.config.from_object(__name__)
 
+
+"""
+Locks
+
+Wanted to avoid this but was spending too much time on
+debugging atomicity in sqlite3
+"""
+
+get_lock = threading.Lock()
 
 """
 Helper methods
@@ -84,8 +94,11 @@ def add():
         db = get_db()
 
         with closing(db.cursor()) as c:
-            c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
-                VALUES (?, ?, ?, 'ready')", insert_tuples)
+            try:
+                c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+                    VALUES (?, ?, ?, 'ready')", insert_tuples)
+            except:
+                print "Unexpected error add"
         
         return "Jobs added"
     else:
@@ -96,9 +109,12 @@ def expire_jobs(db):
     timestamp = datetime.utcnow()
     
     with closing(db.cursor()) as c:
-        c.execute("UPDATE jobs SET status='ready'  \
-            WHERE status='pending' and expire_time < ?",
-            (timestamp,))
+        try:
+            c.execute("UPDATE jobs SET status='ready'  \
+                WHERE status='pending' and expire_time < ?",
+                (timestamp,))
+        except:
+            print "Unexpected error expire"
 
 
 @app.route("/get", methods=['Post'])
@@ -111,24 +127,21 @@ def get():
     db = get_db()
     expire_jobs(db)
 
-    with closing(db.cursor()) as c:
-        c.execute("SELECT id, json, timeout FROM jobs \
-            WHERE administrator_id=? and status='ready' \
-            ORDER BY RANDOM() LIMIT 1;", (aid, ))
+    with get_lock:
+        with closing(db.cursor()) as c:
+            c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
 
-        c_res = c.fetchone()
+            c_res = c.fetchone()
+            if c_res is None:
+                return "No jobs available"
 
-        if c_res is None:
-            return "No jobs available"
-
-        job_id, payload, timeout = c_res
-        expire_time = datetime.utcnow() + timedelta(seconds=timeout)
-
-        c.execute("UPDATE jobs SET status='pending', \
-            claimant_uuid=?, expire_time=? \
-            WHERE id=?;", (session['user_id'],
-                           expire_time,
-                           job_id))
+            job_id, payload, timeout = c_res
+            expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+            
+            c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
+                        expire_time=? WHERE id = ?",
+                        (session['user_id'], expire_time, job_id))
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -145,15 +158,18 @@ def confirm():
     job_id = request.form['job_id']
 
     db = get_db()
-    with closing(db.cursor()) as c:
-        c.execute("UPDATE jobs SET status='complete' \
-            WHERE administrator_id=? and \
-            id=? and status='pending' and \
-            claimant_uuid=?", (aid, job_id, session['user_id']))
+    try:
+        with closing(db.cursor()) as c:
+            c.execute("UPDATE jobs SET status='complete' \
+                WHERE administrator_id=? and \
+                id=? and status='pending' and \
+                claimant_uuid=?", (aid, job_id, session['user_id']))
 
-        if c.rowcount != 1:
-            return "Job confirm failed. Job does not exist, was not begun, \
-                already complete, timed out, or belongs to another user"
+            if c.rowcount != 1:
+                return "Job confirm failed. Job does not exist, was not begun, \
+                    already complete, timed out, or belongs to another user"
+    except:
+        print "Unexpected error confirm"
 
     return "Job confirmed complete"
 

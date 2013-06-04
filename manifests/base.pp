@@ -9,10 +9,16 @@ file { "/etc/profile.d/admin_settings.sh":
 		require => File['admin.ini'],
 }
 
+file { "/home/vagrant":
+	path => '/home/vagrant',
+	ensure => directory,
+}
+
 file { "admin.ini":
 	path => '/home/vagrant/admin.ini',
     ensure => present,
     source => "/vagrant/config/admin.ini",
+    require => File['/home/vagrant'],
 }
 
 exec {"init db":
@@ -24,6 +30,11 @@ exec {"init db":
 }
 
 package {"nginx":
+    ensure => present,
+	require => Exec['apt-get update'],
+}
+
+package {"make":
     ensure => present,
 	require => Exec['apt-get update'],
 }

@@ -20,6 +20,7 @@ Vagrant.configure("2") do |config|
 
   # Provisioning
   # config.vm.provision :shell, :path => "bootstrap.sh"
+  config.vm.provision :shell, :inline => "sudo apt-get update && sudo apt-get install -y puppet"
 
   config.vm.provision :puppet do |puppet|
       puppet.manifests_path = "manifests"
@@ -52,8 +53,21 @@ Vagrant.configure("2") do |config|
   #   # Use VBoxManage to customize the VM. For example to change memory:
   #   vb.customize ["modifyvm", :id, "--memory", "1024"]
   # end
-  #
+
+  config.vm.provider :aws do |aws, override|
+    override.vm.box = 'dummy'
+    override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
+
+    #aws.ami = 'ami-de0d9eb7'
+    #aws.instance_type = 't1.micro'
+    aws.ami = "ami-7747d01e"
+
+    aws.security_groups = ['vagrant'] # Currently this causes an exception
+
+    override.ssh.username = "ubuntu"
+  end
+
   # View the documentation for the provider you're using for more
   # information on available options.
 
-  end
+end

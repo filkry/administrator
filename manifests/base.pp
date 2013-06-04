@@ -15,6 +15,12 @@ file { "admin.ini":
     source => "/vagrant/config/admin.ini",
 }
 
+exec {"init db":
+	path => '/vagrant/',
+	command => 'python manage.py init_db',
+	require => Package['Flask-Script'],
+}
+
 package {"nginx":
     ensure => present,
 	require => Exec['apt-get update'],

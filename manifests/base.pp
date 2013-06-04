@@ -16,9 +16,11 @@ file { "admin.ini":
 }
 
 exec {"init db":
-	path => '/vagrant/',
+	path => ['/usr/bin/',],
+	cwd => '/vagrant/',
 	command => 'python manage.py init_db',
-	require => Package['Flask-Script'],
+	require => [Package['Flask-Script'],
+				Package['python']],
 }
 
 package {"nginx":

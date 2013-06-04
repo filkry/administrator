@@ -2,6 +2,19 @@ exec { "apt-get update":
     command => "/usr/bin/apt-get update",
 }
 
+file { "/etc/profile.d/admin_settings.sh":
+		path => '/etc/profile.d/admin_settings.sh',
+		ensure => present,
+		content => 'export ADMINISTRATOR_SETTINGS=/home/vagrant/admin.ini',
+		require => File['admin.ini'],
+}
+
+file { "admin.ini":
+	path => '/home/vagrant/admin.ini',
+    ensure => present,
+    source => "/vagrant/config/admin.ini",
+}
+
 package {"nginx":
     ensure => present,
 	require => Exec['apt-get update'],

@@ -22,7 +22,7 @@ Set up as app
 """
 app = Flask(__name__)
 app.config.from_object(__name__)
-
+app.config.from_envvar('ADMINISTRATOR_SETTINGS', silent=True)
 
 """
 Locks

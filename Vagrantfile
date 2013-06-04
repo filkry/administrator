@@ -57,12 +57,9 @@ Vagrant.configure("2") do |config|
   config.vm.provider :aws do |aws, override|
     override.vm.box = 'dummy'
     override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
-
-    #aws.ami = 'ami-de0d9eb7'
-    #aws.instance_type = 't1.micro'
     aws.ami = "ami-7747d01e"
 
-    aws.security_groups = ['vagrant'] # Currently this causes an exception
+    aws.security_groups = ['vagrant']
 
     override.ssh.username = "ubuntu"
   end

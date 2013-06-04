@@ -179,7 +179,3 @@ def confirm():
         print "Unexpected error confirm"
 
     return "Job confirmed complete"
-
-if __name__ == "__main__":
-    app.run()
-    app.init_db()

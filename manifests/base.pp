@@ -42,6 +42,12 @@ package { "flask":
     provider => pip,
 }
 
+package { "Flask-Script": 
+    require => Package["python-pip"],
+    ensure  => latest,
+    provider => pip,
+}
+
 service { 'nginx':
 	ensure => running,
 	enable => true,

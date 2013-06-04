@@ -1,6 +1,7 @@
 server {
 	listen 80;
-	access_log  /var/log/nginx/example.log;
+	access_log  /var/log/nginx/nginx-access.log;
+	error_log /var/log/nginx/nginx-error.log;
 
 	location / {
 		proxy_pass http://127.0.0.1:8000;

@@ -59,7 +59,8 @@ package { "Flask-Script":
 service { 'nginx':
 	ensure => running,
 	enable => true,
-	require => Package['nginx'],
+	require => [Package['nginx'],
+				File["administrator_nginx"]],
 	# I don't know what these do
 	# hasstatus => true,
 	# hasrestart => true,

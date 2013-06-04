@@ -1,12 +1,12 @@
 from flask.ext.script import Manager
 
-from administrator import app
+import administrator
 
-manager = Manager(app)
+manager = Manager(administrator.app)
 
 @manager.command
 def init_db():
-    print "hello"
+    administrator.init_db()
 
 if __name__ == "__main__":
     manager.run()

@@ -24,9 +24,41 @@ file { "admin.ini":
 exec {"init db":
 	path => ['/usr/bin/',],
 	cwd => '/vagrant/',
+	creates => '/tmp/administrator.db',
 	command => 'python manage.py init_db',
 	require => [Package['Flask-Script'],
-				Package['python']],
+				Package['python'],
+				File["/etc/profile.d/admin_settings.sh"]],
+}
+
+# handle difference between AWS and local by adding both users to a common group
+
+group {"server":
+	ensure => present,
+}
+
+user {"vagrant":
+	ensure => present,
+	gid => 'server',
+	managehome => true,
+	home => "/home/vagrant",
+	require => [Group["server"],],
+}
+
+user {"ubuntu":
+	ensure => present,
+	gid => 'server',
+	managehome => true,
+	home => "/home/ubuntu",
+	require => [Group["server"],],
+}
+
+file {"database":
+	path => '/tmp/administrator.db',
+	group => 'server',
+	mode => '660',
+	require => [Group["server"],
+				Exec["init db"]],
 }
 
 package {"nginx":

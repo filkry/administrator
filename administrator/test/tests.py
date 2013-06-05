@@ -14,9 +14,9 @@ from random import randint
 """
 Re-usable structs
 """
-abc_jobs = [{"job_secret": "a"},
-            {"job_secret": "b"},
-            {"job_secret": "c"}]
+abc_jobs = [{"job_secret": "aaa"},
+            {"job_secret": "bbb"},
+            {"job_secret": "ccc"}]
 abc_aid = "abc"
 
 def gen_n_jobs(n):
@@ -132,7 +132,8 @@ class AdministratorTests(unittest.TestCase):
         self.assertEqual(rv.mimetype, 'application/json')
 
         payload = json.loads(rv.data)["payload"]
-        self.assertIn(payload["job_secret"], "abc")
+        print payload["job_secret"]
+        self.assertIn(payload["job_secret"], "aaabbbccc")
 
     def test_exhaust_jobs(self):
         self.app.add_jobs(abc_jobs, "real_password")

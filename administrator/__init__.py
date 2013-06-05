@@ -92,6 +92,7 @@ def add():
 
     if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
         jobs = request.json['jobs']
+
         timeout = request.json['timeout']
         insert_tuples = [(request.json['administrator_id'],
                           json.dumps(j),

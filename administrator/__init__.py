@@ -2,6 +2,7 @@ from flask import Flask, request, session, g, redirect, url_for, abort, \
      render_template, flash, _app_ctx_stack, jsonify
 from contextlib import closing # TODO: remove this?
 from datetime import datetime, timedelta
+from crossdomain import crossdomain
 import sqlite3
 import md5
 import json
@@ -84,6 +85,7 @@ Add jobs to the db
 """
 
 @app.route("/")
+@crossdomain(origin='*')
 def hello_world():
     return "Hello world"
 
@@ -99,6 +101,7 @@ def replace_jobs(c, aid, insert_tuples):
     append_jobs(c, insert_tuples)
 
 @app.route("/add", methods=['POST'])
+@crossdomain(origin='*')
 def add():
 
     if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
@@ -153,6 +156,7 @@ def expire_jobs(db):
 
 
 @app.route("/get", methods=['Post'])
+@crossdomain(origin='*')
 def get():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
@@ -200,6 +204,7 @@ def get():
     return jsonify(resp)
 
 @app.route("/confirm", methods=['Post'])
+@crossdomain(origin='*')
 def confirm():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex

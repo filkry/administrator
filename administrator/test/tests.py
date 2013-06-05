@@ -32,20 +32,26 @@ class HelperApp():
         self.admin_id = admin_id
 
     def add_jobs(self, jobs, password, timeout=600):
-        return self.app.post('/add', data=dict(
-          jobs=json.dumps(jobs),
-          administrator_id=self.admin_id,
-          timeout=timeout,
-          password=password), follow_redirects=True)
+        data = {"jobs": jobs,
+                "administrator_id": self.admin_id,
+                "timeout": timeout,
+                "password": password}
+
+        return self.app.post('/add', data=json.dumps(data),
+            content_type='application/json', follow_redirects=True)
 
     def get_job(self):
-        return self.app.post('/get', data=dict(
-            administrator_id=self.admin_id))
+        data = {"administrator_id": self.admin_id }
+
+        return self.app.post('/get', content_type='application/json',
+            data=json.dumps(data))
 
     def confirm_job(self, job_id):
-        return self.app.post('/confirm', data=dict(
-            administrator_id=self.admin_id,
-            job_id = job_id))
+        data = {"administrator_id": self.admin_id,
+                "job_id": job_id}
+
+        return self.app.post('/confirm', content_type='application/json',
+            data=json.dumps(data))
 
 class Worker(threading.Thread):
     def __init__(self, admin_id, job_time, start_time = 0):

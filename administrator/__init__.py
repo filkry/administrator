@@ -89,10 +89,11 @@ def hello_world():
 
 @app.route("/add", methods=['POST'])
 def add():
-    if hash_password(request.form['password']) == app.config['PASSWORD_HASH']:
-        jobs = json.loads(request.form['jobs'])
-        timeout = request.form['timeout']
-        insert_tuples = [(request.form['administrator_id'],
+
+    if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
+        jobs = request.json['jobs']
+        timeout = request.json['timeout']
+        insert_tuples = [(request.json['administrator_id'],
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
@@ -126,7 +127,7 @@ def get():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
-    aid = request.form['administrator_id']
+    aid = request.json['administrator_id']
 
     db = get_db()
     expire_jobs(db)
@@ -161,8 +162,8 @@ def confirm():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
-    aid = request.form['administrator_id']
-    job_id = request.form['job_id']
+    aid = request.json['administrator_id']
+    job_id = request.json['job_id']
 
     db = get_db()
     try:

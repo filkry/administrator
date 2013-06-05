@@ -149,17 +149,30 @@ class AdministratorTests(unittest.TestCase):
         payload = json.loads(rv.data)["payload"]
         self.assertIn(payload["job_secret"], "aaabbbccc")
 
+    def test_get_job_twice(self):
+        rv = self.app.add_jobs(abc_jobs, "real_password")
+        rv = self.app.get_job()
+
+        job_id = json.loads(rv.data)['job_id']
+        rv = self.app.get_job()
+
+        self.assertEqual(json.loads(rv.data)['job_id'], job_id)
+
     def test_exhaust_jobs(self):
         self.app.add_jobs(abc_jobs, "real_password")
+
+        app2 = HelperApp(abc_aid)
+        app3 = HelperApp(abc_aid)
+        app4 = HelperApp(abc_aid)
         
         rv = self.app.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.app.get_job()
+        rv = app2.get_job()
         self.assertNotIn("No jobs available", rv.data)
-        rv = self.app.get_job()
+        rv = app3.get_job()
         self.assertNotIn("No jobs available", rv.data)
 
-        rv = self.app.get_job()
+        rv = app4.get_job()
         self.assertIn("No jobs available", rv.data)
 
     def test_confirm_job(self):

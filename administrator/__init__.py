@@ -165,19 +165,31 @@ def get():
     with get_lock:
         with closing(db.cursor()) as c:
             try:
-                c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                    and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
+                job_id = None
+                payload = None
+
+                # Check if we already have a job
+                c.execute("SELECT id, json FROM jobs WHERE claimant_uuid=? \
+                    and status='pending'", (session['user_id'],))
 
                 c_res = c.fetchone()
-                if c_res is None:
-                    return "No jobs available"
+                if not c_res is None:
+                    job_id, payload = c_res
+                else:
+                    # get a random job
+                    c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                        and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
 
-                job_id, payload, timeout = c_res
-                expire_time = datetime.utcnow() + timedelta(seconds=timeout)
-                
-                c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
-                            expire_time=? WHERE id = ?",
-                            (session['user_id'], expire_time, job_id))
+                    c_res = c.fetchone()
+                    if c_res is None:
+                        return "No jobs available"
+
+                    job_id, payload, timeout = c_res
+                    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+                    
+                    c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
+                                expire_time=? WHERE id = ?",
+                                (session['user_id'], expire_time, job_id))
             except Exception,e:
                 print str(e)
 

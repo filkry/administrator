@@ -81,6 +81,11 @@ package {"python":
 	require => Exec['apt-get update'],
 }
 
+package {"sqlite3":
+	ensure => present,
+	require => Exec['apt-get update'],
+}
+
 package {"python-pip":
 	ensure => present,
 	require => [Exec['apt-get update'],

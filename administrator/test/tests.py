@@ -31,10 +31,11 @@ class HelperApp():
         self.app = administrator.app.test_client()
         self.admin_id = admin_id
 
-    def add_jobs(self, jobs, password, timeout=600):
+    def add_jobs(self, jobs, password, mode="append", timeout=600):
         data = {"jobs": jobs,
                 "administrator_id": self.admin_id,
                 "timeout": timeout,
+                "mode": mode,
                 "password": password}
 
         return self.app.post('/add', data=json.dumps(data),
@@ -114,7 +115,21 @@ class AdministratorTests(unittest.TestCase):
         self.assertIn("Password invalid", rv.data)
 
         rv = self.app.add_jobs(abc_jobs, "real_password")
-        self.assertIn("Jobs added", rv.data)
+        self.assertIn("Jobs appended", rv.data)
+
+    def test_add_jobs_populate(self):
+        rv = self.app.add_jobs(abc_jobs, "real_password", "populate")
+        self.assertIn("Jobs appended", rv.data)
+
+        rv = self.app.add_jobs(abc_jobs, "real_password", "populate")
+        self.assertIn("Not repopulating jobs", rv.data)
+
+    def test_add_jobs_replace(self):
+        rv = self.app.add_jobs(abc_jobs, "real_password", "append")
+        self.assertIn("Jobs appended", rv.data)
+
+        rv = self.app.add_jobs(abc_jobs, "real_password", "replace")
+        self.assertIn("Jobs replaced", rv.data)
 
     def test_get_job_empty(self):
         rv = self.app.get_job()
@@ -132,7 +147,6 @@ class AdministratorTests(unittest.TestCase):
         self.assertEqual(rv.mimetype, 'application/json')
 
         payload = json.loads(rv.data)["payload"]
-        print payload["job_secret"]
         self.assertIn(payload["job_secret"], "aaabbbccc")
 
     def test_exhaust_jobs(self):

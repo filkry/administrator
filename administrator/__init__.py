@@ -87,6 +87,17 @@ Add jobs to the db
 def hello_world():
     return "Hello world"
 
+def delete_jobs(c, aid):
+    return c.execute("DELETE FROM jobs WHERE administrator_id=?", (aid,))
+
+def append_jobs(c, insert_tuples):
+    return c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+                            VALUES (?, ?, ?, 'ready')", insert_tuples)
+
+def replace_jobs(c, aid, insert_tuples):
+    delete_jobs(c, aid)
+    append_jobs(c, insert_tuples)
+
 @app.route("/add", methods=['POST'])
 def add():
 
@@ -94,19 +105,37 @@ def add():
         jobs = request.json['jobs']
 
         timeout = request.json['timeout']
-        insert_tuples = [(request.json['administrator_id'],
+        mode = request.json['mode']
+        aid = request.json['administrator_id']
+        insert_tuples = [(aid,
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
 
-        with closing(db.cursor()) as c:
-            try:
-                c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
-                    VALUES (?, ?, ?, 'ready')", insert_tuples)
-            except:
-                print "Unexpected error add"
+        with get_lock:
+            with closing(db.cursor()) as c:
+                try:
+                    if mode == 'append':
+                        append_jobs(c, insert_tuples)
+                        return "Jobs appended"
+                    elif mode == 'replace':
+                        replace_jobs(c, aid, insert_tuples)
+                        return "Jobs replaced"
+                    elif mode == 'populate':
+                        c.execute("SELECT COUNT(id) FROM jobs WHERE administrator_id=?",
+                            (aid,))
+
+                        count = c.fetchone()[0]
+
+                        if(count) == 0:
+                            append_jobs(c, insert_tuples)
+                            return "Jobs appended"
+                        else:
+                            return "Not repopulating jobs"
+
+                except Exception,e:
+                    print str(e)
         
-        return "Jobs added"
     else:
         return "Password invalid"
 

@@ -181,7 +181,7 @@ def get():
                     and status='pending'", (aid, session_name,))
 
                 c_res = c.fetchone()
-                if not c_res is None:
+                if not c_res is None and app.config['TRACK_SESSION']: # hack: only do this if we're tracking sessions
                     job_id, payload = c_res
                 else:
                     # get a random job

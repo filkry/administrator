@@ -9,6 +9,7 @@ import md5
 import time
 import threading
 from random import randint
+from sets import Set
 
 
 """
@@ -71,14 +72,44 @@ class Worker(threading.Thread):
             self.reason = rv.data
             return
 
-        job_id = json.loads(rv.data)['job_id']
+        self.job_id = json.loads(rv.data)['job_id']
 
         if self.job_time >= 0:
             time.sleep(self.job_time)
-            rv = self.app.confirm_job(job_id)
+            rv = self.app.confirm_job(self.job_id)
             self.success = "Job confirmed complete" in rv.data
             if not self.success:
                 self.reason = rv.data
+
+class AdministratorNoSessionTests(unittest.TestCase):
+    def setUp(self):
+        self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
+        administrator.app.config['TESTING'] = True
+        administrator.app.config['TRACK_SESSION'] = False
+        administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
+        administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
+        self.app = HelperApp(abc_aid)
+        administrator.init_db()
+
+    def tearDown(self):
+        os.close(self.db_fd)
+        os.unlink(administrator.app.config['DATABASE'])
+
+    def test_all_jobs_unique(self):
+        many = 25
+        self.app.add_jobs(gen_n_jobs(many), "real_password")
+        workers = [Worker(abc_aid, 1) for i in range(many)]
+        for w in workers:
+            w.start()
+
+        [w.join() for w in workers]
+
+        ids = Set()
+        for w in workers:
+            ids.add(w.job_id)
+
+        self.assertEqual(len(ids), many)
+
 
 class AdministratorTests(unittest.TestCase):
 
@@ -230,6 +261,21 @@ class AdministratorTests(unittest.TestCase):
         time.sleep(10)
         rv = self.app.get_job()
         self.assertNotIn("Job confirm failed", rv.data)
+
+    def test_all_jobs_unique(self):
+        many = 25
+        self.app.add_jobs(gen_n_jobs(many), "real_password")
+        workers = [Worker(abc_aid, 1) for i in range(many)]
+        for w in workers:
+            w.start()
+
+        [w.join() for w in workers]
+
+        ids = Set()
+        for w in workers:
+            ids.add(w.job_id)
+
+        self.assertEqual(len(ids), many)
 
     def test_many_workers(self):
         many = 25

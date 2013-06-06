@@ -96,6 +96,7 @@ class AdministratorTests(unittest.TestCase):
     def setUp(self):
         self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
         administrator.app.config['TESTING'] = True
+        administrator.app.config['TRACK_SESSION'] = True
         administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
         administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
         self.app = HelperApp(abc_aid)

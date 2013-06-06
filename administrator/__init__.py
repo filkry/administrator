@@ -17,6 +17,7 @@ Embedded config
 DATABASE = '/tmp/administrator.db'
 PASSWORD_HASH = md5.new('fancy').digest()
 SECRET_KEY = md5.new('fancy').digest()
+TRACK_SESSION = False
 
 """
 Set up as app
@@ -101,7 +102,7 @@ def replace_jobs(c, aid, insert_tuples):
     append_jobs(c, insert_tuples)
 
 @app.route("/add", methods=['POST'])
-@crossdomain(origin='*')
+@crossdomain(origin='*', headers='Content-Type')
 def add():
 
     if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
@@ -156,7 +157,7 @@ def expire_jobs(db):
 
 
 @app.route("/get", methods=['Post'])
-@crossdomain(origin='*')
+@crossdomain(origin='*', headers='Content-Type')
 def get():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
@@ -172,9 +173,12 @@ def get():
                 job_id = None
                 payload = None
 
+                session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
+
                 # Check if we already have a job
-                c.execute("SELECT id, json FROM jobs WHERE claimant_uuid=? \
-                    and status='pending'", (session['user_id'],))
+                c.execute("SELECT id, json FROM jobs WHERE administrator_id=? \
+                    and claimant_uuid=? \
+                    and status='pending'", (aid, session_name,))
 
                 c_res = c.fetchone()
                 if not c_res is None:
@@ -193,7 +197,7 @@ def get():
                     
                     c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
                                 expire_time=? WHERE id = ?",
-                                (session['user_id'], expire_time, job_id))
+                                (session_name, expire_time, job_id))
             except Exception,e:
                 print str(e)
 
@@ -204,21 +208,24 @@ def get():
     return jsonify(resp)
 
 @app.route("/confirm", methods=['Post'])
-@crossdomain(origin='*')
+@crossdomain(origin='*', headers='Content-Type')
 def confirm():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
     aid = request.json['administrator_id']
+
     job_id = request.json['job_id']
 
     db = get_db()
     try:
         with closing(db.cursor()) as c:
+            session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
+
             c.execute("UPDATE jobs SET status='complete' \
                 WHERE administrator_id=? and \
                 id=? and status='pending' and \
-                claimant_uuid=?", (aid, job_id, session['user_id']))
+                claimant_uuid=?", (aid, job_id, session_name))
 
             if c.rowcount != 1:
                 return "Job confirm failed. Job does not exist, was not begun, \

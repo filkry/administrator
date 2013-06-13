@@ -16,14 +16,20 @@ Vagrant.configure("2") do |config|
   # Create a forwarded port mapping which allows access to a specific port
   # within the machine from a port on the host machine. In the example below,
   # accessing "localhost:8080" will access port 80 on the guest machine.
-  config.vm.network :forwarded_port, guest: 5000, host: 5000
+  config.vm.network :forwarded_port, guest: 80, host: 8000
 
   # Provisioning
-  config.vm.provision :shell, :path => "bootstrap.sh"
+  # config.vm.provision :shell, :path => "bootstrap.sh"
+  config.vm.provision :shell, :inline => "sudo apt-get update && sudo apt-get install -y puppet"
+
+  config.vm.provision :puppet do |puppet|
+      puppet.manifests_path = "manifests"
+      puppet.manifest_file  = "base.pp"
+  end
 
   # Create a private network, which allows host-only access to the machine
   # using a specific IP.
-  # config.vm.network :private_network, ip: "192.168.33.10"
+  config.vm.network :private_network, ip: "33.33.33.33"
 
   # Create a public network, which generally matched to bridged network.
   # Bridged networks make the machine appear as another physical device on
@@ -47,8 +53,18 @@ Vagrant.configure("2") do |config|
   #   # Use VBoxManage to customize the VM. For example to change memory:
   #   vb.customize ["modifyvm", :id, "--memory", "1024"]
   # end
-  #
+
+  config.vm.provider :aws do |aws, override|
+    override.vm.box = 'dummy'
+    override.vm.box_url = "https://github.com/mitchellh/vagrant-aws/raw/master/dummy.box"
+    aws.ami = "ami-7747d01e"
+
+    aws.security_groups = ['vagrant']
+
+    override.ssh.username = "ubuntu"
+  end
+
   # View the documentation for the provider you're using for more
   # information on available options.
 
-  end
+end

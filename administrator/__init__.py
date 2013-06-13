@@ -2,26 +2,38 @@ from flask import Flask, request, session, g, redirect, url_for, abort, \
      render_template, flash, _app_ctx_stack, jsonify
 from contextlib import closing # TODO: remove this?
 from datetime import datetime, timedelta
+from crossdomain import crossdomain
 import sqlite3
 import md5
 import json
 import uuid
+import threading
 app = Flask(__name__)
 
 """
 Embedded config
 """
 
-DATABASE = '~/administrator.db'
+DATABASE = '/tmp/administrator.db'
 PASSWORD_HASH = md5.new('fancy').digest()
 SECRET_KEY = md5.new('fancy').digest()
+TRACK_SESSION = False
 
 """
 Set up as app
 """
 app = Flask(__name__)
 app.config.from_object(__name__)
+app.config.from_envvar('ADMINISTRATOR_SETTINGS', silent=True)
 
+"""
+Locks
+
+Wanted to avoid this but was spending too much time on
+debugging atomicity in sqlite3
+"""
+
+get_lock = threading.Lock()
 
 """
 Helper methods
@@ -73,65 +85,127 @@ def close_db_connection(exception):
 Add jobs to the db
 """
 
+@app.route("/")
+@crossdomain(origin='*')
+def hello_world():
+    return "Hello world"
+
+def delete_jobs(c, aid):
+    return c.execute("DELETE FROM jobs WHERE administrator_id=?", (aid,))
+
+def append_jobs(c, insert_tuples):
+    return c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+                            VALUES (?, ?, ?, 'ready')", insert_tuples)
+
+def replace_jobs(c, aid, insert_tuples):
+    delete_jobs(c, aid)
+    append_jobs(c, insert_tuples)
+
 @app.route("/add", methods=['POST'])
+@crossdomain(origin='*', headers='Content-Type')
 def add():
-    if hash_password(request.form['password']) == app.config['PASSWORD_HASH']:
-        jobs = json.loads(request.form['jobs'])
-        timeout = request.form['timeout']
-        insert_tuples = [(request.form['administrator_id'],
+
+    if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
+        jobs = request.json['jobs']
+
+        timeout = request.json['timeout']
+        mode = request.json['mode']
+        aid = request.json['administrator_id']
+        insert_tuples = [(aid,
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
-        c = db.cursor()
-        c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
-            VALUES (?, ?, ?, 'ready')", insert_tuples)
-        db.commit()
-        return "Jobs added"
+
+        with get_lock:
+            with closing(db.cursor()) as c:
+                try:
+                    if mode == 'append':
+                        append_jobs(c, insert_tuples)
+                        return "Jobs appended"
+                    elif mode == 'replace':
+                        replace_jobs(c, aid, insert_tuples)
+                        return "Jobs replaced"
+                    elif mode == 'populate':
+                        c.execute("SELECT COUNT(id) FROM jobs WHERE administrator_id=?",
+                            (aid,))
+
+                        count = c.fetchone()[0]
+
+                        if(count) == 0:
+                            append_jobs(c, insert_tuples)
+                            return "Jobs appended"
+                        else:
+                            return "Not repopulating jobs"
+
+                except Exception,e:
+                    print str(e)
+        
     else:
         return "Password invalid"
 
 
 def expire_jobs(db):
     timestamp = datetime.utcnow()
-    c = db.cursor()
-    c.execute("UPDATE jobs SET status='ready'  \
-        WHERE status='pending' and expire_time < ?",
-        (timestamp,))
-    db.commit()
+    
+    with closing(db.cursor()) as c:
+        try:
+            c.execute("UPDATE jobs SET status='ready'  \
+                WHERE status='pending' and expire_time < ?",
+                (timestamp,))
+        except Exception,e:
+            print str(e)
 
 
 @app.route("/get", methods=['Post'])
+@crossdomain(origin='*', headers='Content-Type')
 def get():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
-    aid = request.form['administrator_id']
+    aid = request.json['administrator_id']
 
     db = get_db()
     expire_jobs(db)
 
-    c = db.cursor()   
-    c.execute("BEGIN")
-    c.execute("SELECT id, json, timeout FROM jobs \
-        WHERE administrator_id=? and status='ready' \
-        ORDER BY RANDOM() LIMIT 1;", (aid, ))
+    with get_lock:
+        with closing(db.cursor()) as c:
+            try:
+                job_id = None
+                payload = None
 
-    c_res = c.fetchone()
+                session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
 
-    if c_res is None:
-        c.execute("COMMIT")
-        return "No jobs available"
+                # Check if we already have a job
+                c.execute("SELECT id, json FROM jobs WHERE administrator_id=? \
+                    and claimant_uuid=? \
+                    and status='pending'", (aid, session_name,))
 
-    job_id, payload, timeout = c_res
-    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+                c_res = c.fetchone()
+                if not c_res is None and app.config['TRACK_SESSION']: # hack: only do this if we're tracking sessions
+                    job_id, payload = c_res
+                else:
+                    # get a random job
+                    c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                        and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
 
-    c.execute("UPDATE jobs SET status='pending', \
-        claimant_uuid=?, expire_time=? \
-        WHERE id=?;", (session['user_id'],
-                       expire_time,
-                       job_id))
-    c.execute("COMMIT")
-    db.commit()
+                    c_res = c.fetchone()
+                    if c_res is None:
+                        # Try to get a pending job
+                        c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                            and status='pending' ORDER BY RANDOM() LIMIT 1", (aid,))
+                        
+                        c_res = c.fetchone()
+                        if c_res is None:
+                            return "No jobs available"
+
+                    job_id, payload, timeout = c_res
+                    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+                    
+                    c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
+                                expire_time=? WHERE id = ?",
+                                (session_name, expire_time, job_id))
+            except Exception,e:
+                print str(e)
 
     payload = json.loads(payload)
     resp = {'job_id': job_id,
@@ -140,26 +214,29 @@ def get():
     return jsonify(resp)
 
 @app.route("/confirm", methods=['Post'])
+@crossdomain(origin='*', headers='Content-Type')
 def confirm():
     if not 'user_id' in session:
         session['user_id'] = uuid.uuid4().hex
 
+    aid = request.json['administrator_id']
+
+    job_id = request.json['job_id']
+
     db = get_db()
-    c = db.cursor()
+    try:
+        with closing(db.cursor()) as c:
+            session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
 
-    aid = request.form['administrator_id']
-    job_id = request.form['job_id']
-        
-    c.execute("UPDATE jobs SET status='complete' \
-        WHERE administrator_id=? and \
-        id=? and status='pending' and \
-        claimant_uuid=?", (aid, job_id, session['user_id']))
+            c.execute("UPDATE jobs SET status='complete' \
+                WHERE administrator_id=? and \
+                id=? and status='pending' and \
+                claimant_uuid=?", (aid, job_id, session_name))
 
-    if c.rowcount != 1:
-        return "Job confirm failed. Job does not exist, was not begun, \
-            already complete, timed out, or belongs to another user"
-
-    db.commit()
+            if c.rowcount != 1:
+                return "Job confirm failed. Job does not exist, was not begun, \
+                    already complete, timed out, or belongs to another user"
+    except:
+        print "Unexpected error confirm"
 
     return "Job confirmed complete"
-

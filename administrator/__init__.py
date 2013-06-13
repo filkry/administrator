@@ -190,7 +190,13 @@ def get():
 
                     c_res = c.fetchone()
                     if c_res is None:
-                        return "No jobs available"
+                        # Try to get a pending job
+                        c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                            and status='pending' ORDER BY RANDOM() LIMIT 1", (aid,))
+                        
+                        c_res = c.fetchone()
+                        if c_res is None:
+                            return "No jobs available"
 
                     job_id, payload, timeout = c_res
                     expire_time = datetime.utcnow() + timedelta(seconds=timeout)

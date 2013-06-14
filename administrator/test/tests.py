@@ -144,9 +144,11 @@ class AdministratorTests(unittest.TestCase):
     def test_add_jobs_password(self):
         log = logging.getLogger( "AdministratorTests.test_db_has_administrator_table")
         rv = self.app.add_jobs(abc_jobs, "fake_password")
+        self.assertEqual(403, rv.status_code)
         self.assertIn("Password invalid", rv.data)
 
         rv = self.app.add_jobs(abc_jobs, "real_password")
+        self.assertEqual(200, rv.status_code)
         self.assertIn("Jobs appended", rv.data)
 
     def test_add_jobs_populate(self):
@@ -165,6 +167,7 @@ class AdministratorTests(unittest.TestCase):
 
     def test_get_job_empty(self):
         rv = self.app.get_job()
+        self.assertEqual(503, rv.status_code)
         self.assertIn("No jobs available", rv.data)
 
     def test_get_job(self):
@@ -176,6 +179,7 @@ class AdministratorTests(unittest.TestCase):
         rv = self.app.get_job()
         log.debug("get_job response mimetype is '%s'", rv.mimetype)
         log.debug("get_job response payload is '%s'", rv.data)
+        self.assertEqual(200, rv.status_code)
         self.assertEqual(rv.mimetype, 'application/json')
 
         payload = json.loads(rv.data)["payload"]

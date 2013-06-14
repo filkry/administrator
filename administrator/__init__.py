@@ -1,5 +1,5 @@
 from flask import Flask, request, session, g, redirect, url_for, abort, \
-     render_template, flash, _app_ctx_stack, jsonify
+     render_template, flash, _app_ctx_stack, jsonify, make_response
 from contextlib import closing # TODO: remove this?
 from datetime import datetime, timedelta
 from crossdomain import crossdomain
@@ -141,7 +141,7 @@ def add():
                     print str(e)
         
     else:
-        return "Password invalid"
+        return make_response("Password invalid", 403)
 
 
 def expire_jobs(db):
@@ -196,7 +196,7 @@ def get():
                         
                         c_res = c.fetchone()
                         if c_res is None:
-                            return "No jobs available"
+                            return make_response("No jobs available", 503)
 
                     job_id, payload, timeout = c_res
                     expire_time = datetime.utcnow() + timedelta(seconds=timeout)

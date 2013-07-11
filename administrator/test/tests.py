@@ -20,6 +20,18 @@ abc_jobs = [{"job_secret": "aaa"},
             {"job_secret": "ccc"}]
 abc_aid = "abc"
 
+multi_jobs = [{"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "aaa"},
+              {"job_secret": "bbb"}]
+
 def gen_n_jobs(n):
     return [{"job_secret": x} for x in range(n)]
 
@@ -44,6 +56,13 @@ class HelperApp():
 
     def get_job(self):
         data = {"administrator_id": self.admin_id }
+
+        return self.app.post('/get', content_type='application/json',
+            data=json.dumps(data))
+
+    def get_job_not_like(self, job_payloads):
+        data = {"administrator_id": self.admin_id,
+                "not_like": job_payloads }
 
         return self.app.post('/get', content_type='application/json',
             data=json.dumps(data))
@@ -323,6 +342,17 @@ class AdministratorTests(unittest.TestCase):
         self.assertListEqual([w.success for w in workers],
                              [True for w in workers])
 
+    def test_get_job_not_like(self):
+        for i in range(10):
+            self.app.add_jobs(multi_jobs, "real_password")
+            rv = self.app.get_job()
+            payload = json.loads(rv.data)["payload"]
+
+            app2 = HelperApp(abc_aid)
+            rv = app2.get_job_not_like([payload])
+            payload2 = json.loads(rv.data)["payload"]
+
+            self.assertNotEqual(payload, payload2)
 
     # This test became unneccesary when pending jobs became up for grabs in lieu of open
     

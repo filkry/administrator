@@ -163,6 +163,7 @@ def get():
         session['user_id'] = uuid.uuid4().hex
 
     aid = request.json['administrator_id']
+    not_like = request.json['not_like'] if 'not_like' in request.json else None
 
     db = get_db()
     expire_jobs(db)
@@ -183,35 +184,44 @@ def get():
                 c_res = c.fetchone()
                 if not c_res is None and app.config['TRACK_SESSION']: # hack: only do this if we're tracking sessions
                     job_id, payload = c_res
+                    payload = json.loads(payload)
                 else:
                     # get a random job
-                    c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                        and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
 
-                    c_res = c.fetchone()
-                    if c_res is None:
-                        # Try to get a pending job
+                    # This is a horrible, inefficient hack and could infinite loop
+                    while True:
                         c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                            and status='pending' ORDER BY RANDOM() LIMIT 1", (aid,))
-                        
+                            and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
+
                         c_res = c.fetchone()
                         if c_res is None:
-                            return make_response("No jobs available", 503)
+                            # Try to get a pending job
+                            c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
+                                and status='pending' ORDER BY RANDOM() LIMIT 1", (aid,))
+                            
+                            c_res = c.fetchone()
+                            if c_res is None:
+                                return make_response("No jobs available", 503)
 
-                    job_id, payload, timeout = c_res
-                    expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+                        job_id, payload, timeout = c_res
+                        payload = json.loads(payload)
+                        expire_time = datetime.utcnow() + timedelta(seconds=timeout)
+
+                        if not_like is None or not payload in not_like:
+                            break
                     
                     c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
                                 expire_time=? WHERE id = ?",
                                 (session_name, expire_time, job_id))
+
+
+                resp = {'job_id': job_id,
+                        'payload': payload}
+                return jsonify(resp)
             except Exception,e:
                 print str(e)
 
-    payload = json.loads(payload)
-    resp = {'job_id': job_id,
-            'payload': payload}
-
-    return jsonify(resp)
+    
 
 @app.route("/confirm", methods=['Post'])
 @crossdomain(origin='*', headers='Content-Type')

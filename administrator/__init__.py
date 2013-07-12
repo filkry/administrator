@@ -96,7 +96,7 @@ def delete_jobs(c, aid):
     return c.execute("DELETE FROM jobs WHERE administrator_id=?", (aid,))
 
 def append_jobs(c, insert_tuples):
-    return c.executemany("INSERT INTO jobs (administrator_id, json, timeout, status) \
+    return c.executemany("INSERT INTO jobs (administrator_id, job_type, json, timeout, status) \
                             VALUES (?, ?, ?, 'ready')", insert_tuples)
 
 def replace_jobs(c, aid, insert_tuples):
@@ -113,6 +113,7 @@ def add():
         mode = request.json['mode']
         aid = request.json['administrator_id']
         insert_tuples = [(aid,
+                          #TODO: start from here, need to get fingerprint of json
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()

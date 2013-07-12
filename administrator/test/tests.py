@@ -86,8 +86,7 @@ class AdministratorNoSessionTests(unittest.TestCase):
         self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
         administrator.app.config['TESTING'] = True
         administrator.app.config['TRACK_SESSION'] = False
-        administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
-        administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
+        administrator.app.config['PASSWORD_HASH'] = administrator.hash_password('real_password')
         self.app = HelperApp(abc_aid)
         administrator.init_db()
 
@@ -128,8 +127,7 @@ class AdministratorTests(unittest.TestCase):
         self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
         administrator.app.config['TESTING'] = True
         administrator.app.config['TRACK_SESSION'] = True
-        administrator.app.config['PASSWORD_HASH'] = md5.new('real_password').digest()
-        administrator.app.config['SECRET_KEY'] = md5.new('real_key').digest()
+        administrator.app.config['PASSWORD_HASH'] = administrator.hash_password('real_password')
         self.app = HelperApp(abc_aid)
         administrator.init_db()
 

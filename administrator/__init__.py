@@ -4,19 +4,32 @@ from contextlib import closing # TODO: remove this?
 from datetime import datetime, timedelta
 from crossdomain import crossdomain
 import sqlite3
-import md5
+import hashlib
 import json
 import uuid
+import os
 import threading
 app = Flask(__name__)
+
+
+"""
+Helper methods
+"""
+
+def hash_password(pw):
+    """
+    TODO: should be salted at some point in the future
+    """
+    pw = pw.encode('utf-8')
+    return hashlib.sha224(pw).hexdigest()
 
 """
 Embedded config
 """
 
 DATABASE = '/tmp/administrator.db'
-PASSWORD_HASH = md5.new('fancy').digest()
-SECRET_KEY = md5.new('fancy').digest()
+PASSWORD_HASH = hash_password('fancy')
+SECRET_KEY = os.urandom(24)
 TRACK_SESSION = False
 
 """
@@ -34,17 +47,6 @@ debugging atomicity in sqlite3
 """
 
 get_lock = threading.Lock()
-
-"""
-Helper methods
-"""
-
-def hash_password(pw):
-    """
-    This uses unsalted md5 for now, as my use case does not
-    require a lot of security to merit additional effort.
-    """
-    return md5.new(pw).digest()
 
 """
 Initialize, connect to the db
@@ -104,7 +106,6 @@ def replace_jobs(c, aid, insert_tuples):
 @app.route("/add", methods=['POST'])
 @crossdomain(origin='*', headers='Content-Type')
 def add():
-
     if hash_password(request.json['password']) == app.config['PASSWORD_HASH']:
         jobs = request.json['jobs']
 

@@ -19,3 +19,22 @@ Vagrant.configure("2") do |config|
   end
 end
 ```
+
+You also need a configuration file specifically for administrator. There is a sample in ``config/admin.ini.sample``:
+
+	DATABASE='/tmp/administrator.db'
+	PASSWORD_HASH= <KEY>
+	SECRET_KEY= <KEY>
+	TRACK_SESSION = False
+
+The ``PASSWORD_HASH`` is used for adding jobs. ``SECRET_KEY`` is used to sign cookies created by Flask.
+
+You can generate a good secret key by doing this at a python prompt:
+
+	import os
+	os.urandom(24)
+
+To generate a hash of a password, at the same prompt, enter:
+
+	import hashlib
+	hashlib.sha224("password").hexdigest()

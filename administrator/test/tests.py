@@ -52,8 +52,12 @@ class HelperApp():
         return self.app.post('/get', content_type='application/json',
             data=json.dumps(data))
 
-    def confirm_job(self, job_id):
-        data = {"administrator_id": self.admin_id,
+    def confirm_job(self, job_id. admin_id = None):
+        aid = self.admin_id
+        if admin_id is not None:
+            aid = admin_id
+
+        data = {"administrator_id": aid,
                 "job_id": job_id}
 
         return self.app.post('/confirm', content_type='application/json',
@@ -311,6 +315,7 @@ class AdministratorTests(unittest.TestCase):
 
         rv = self.app.get_job()
         payload = json.loads(rv.data)["payload"]
+
         self.assertIn(payload["job_secret"], "aaabbbccc")
         
         job_id = json.loads(rv.data)['job_id']
@@ -323,8 +328,10 @@ class AdministratorTests(unittest.TestCase):
             self.assertIn(pl["job_secret"], "aaabbbccc")
             self.assertNotEqual(payload, pl)
 
+            print pl
+
             job_id = json.loads(rv.data)['job_id']
-            self.app.confirm_job(job_id)
+            self.app.confirm_job(job_id, second_aid)
 
         # Try and get a third job and fail
         rv = self.app.get_job(second_aid)

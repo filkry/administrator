@@ -1,0 +1,4 @@
+DATABASE='/tmp/administrator.db'
+PASSWORD_HASH= <KEY>
+SECRET_KEY= <KEY>
+TRACK_SESSION = False

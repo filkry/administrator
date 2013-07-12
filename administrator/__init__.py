@@ -30,7 +30,7 @@ Embedded config
 DATABASE = '/tmp/administrator.db'
 PASSWORD_HASH = hash_password('fancy')
 SECRET_KEY = os.urandom(24)
-TRACK_SESSION = False
+ENFORCE_JOB_TYPES = True
 
 """
 Set up as app
@@ -161,6 +161,8 @@ def expire_jobs(db):
 @crossdomain(origin='*', headers='Content-Type')
 def get():
     if not 'user_id' in session:
+        # this well generate a new UUID each time for users without third party cookies
+        # TODO: get a better user identification scheme
         session['user_id'] = uuid.uuid4().hex
 
     aid = request.json['administrator_id']
@@ -174,7 +176,7 @@ def get():
                 job_id = None
                 payload = None
 
-                session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
+                session_name = session['user_id']
 
                 # Check if we already have a job
                 c.execute("SELECT id, json FROM jobs WHERE administrator_id=? \
@@ -182,7 +184,7 @@ def get():
                     and status='pending'", (aid, session_name,))
 
                 c_res = c.fetchone()
-                if not c_res is None and app.config['TRACK_SESSION']: # hack: only do this if we're tracking sessions
+                if not c_res is None:
                     job_id, payload = c_res
                 else:
                     # get a random job
@@ -227,7 +229,7 @@ def confirm():
     db = get_db()
     try:
         with closing(db.cursor()) as c:
-            session_name = session['user_id'] if app.config['TRACK_SESSION'] else 'FakeSession'
+            session_name = session['user_id']
 
             c.execute("UPDATE jobs SET status='complete' \
                 WHERE administrator_id=? and \

@@ -30,7 +30,7 @@ Embedded config
 DATABASE = '/tmp/administrator.db'
 PASSWORD_HASH = hash_password('fancy')
 SECRET_KEY = os.urandom(24)
-ENFORCE_JOB_TYPES = True
+ENFORCE_JOB_TYPES = True # TODO: make this toggle do something
 
 """
 Set up as app

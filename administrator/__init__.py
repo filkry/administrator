@@ -97,7 +97,7 @@ def delete_jobs(c, aid):
 
 def append_jobs(c, insert_tuples):
     return c.executemany("INSERT INTO jobs (administrator_id, job_type, json, timeout, status) \
-                            VALUES (?, ?, ?, 'ready')", insert_tuples)
+                            VALUES (?, ?, ?, ?, 'ready')", insert_tuples)
 
 def replace_jobs(c, aid, insert_tuples):
     delete_jobs(c, aid)
@@ -113,7 +113,7 @@ def add():
         mode = request.json['mode']
         aid = request.json['administrator_id']
         insert_tuples = [(aid,
-                          #TODO: start from here, need to get fingerprint of json
+                          hash_password(json.dumps(j)),
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
@@ -140,6 +140,7 @@ def add():
                             return "Not repopulating jobs"
 
                 except Exception,e:
+                    print "add error"
                     print str(e)
         
     else:
@@ -177,38 +178,48 @@ def get():
                 job_id = None
                 payload = None
 
-                session_name = session['user_id']
+                user_id = session['user_id']
 
                 # Check if we already have a job
                 c.execute("SELECT id, json FROM jobs WHERE administrator_id=? \
                     and claimant_uuid=? \
-                    and status='pending'", (aid, session_name,))
+                    and status='pending'", (aid, user_id,))
 
                 c_res = c.fetchone()
                 if not c_res is None:
                     job_id, payload = c_res
                 else:
                     # get a random job
-                    c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                        and status='ready' ORDER BY RANDOM() LIMIT 1", (aid,))
+                    c.execute("SELECT id, job_type, json, timeout FROM jobs \
+                        WHERE administrator_id=? \
+                        AND status='ready' \
+                        AND job_type NOT IN (SELECT job_type FROM user_job_types WHERE uuid=?) \
+                        ORDER BY RANDOM() LIMIT 1", (aid, user_id,))
 
                     c_res = c.fetchone()
                     if c_res is None:
                         # Try to get a pending job
-                        c.execute("SELECT id, json, timeout FROM jobs WHERE administrator_id=? \
-                            and status='pending' ORDER BY RANDOM() LIMIT 1", (aid,))
+                        c.execute("SELECT id, job_type, json, timeout FROM jobs \
+                            WHERE administrator_id=? \
+                            AND status='pending' \
+                            AND job_type NOT IN (SELECT job_type FROM user_job_types WHERE uuid=?) \
+                            ORDER BY RANDOM() LIMIT 1", (aid, user_id,))
                         
                         c_res = c.fetchone()
                         if c_res is None:
                             return make_response("No jobs available", 503)
 
-                    job_id, payload, timeout = c_res
+                    job_id, job_type, payload, timeout = c_res
                     expire_time = datetime.utcnow() + timedelta(seconds=timeout)
                     
                     c.execute("UPDATE jobs SET status='pending', claimant_uuid=?, \
                                 expire_time=? WHERE id = ?",
-                                (session_name, expire_time, job_id))
+                                (user_id, expire_time, job_id))
+
+                    c.execute("INSERT INTO user_job_types (uuid, job_type) \
+                        VALUES (?, ?)", (user_id, job_type,))
             except Exception,e:
+                print "get error"
                 print str(e)
 
     payload = json.loads(payload)

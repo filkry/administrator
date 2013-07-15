@@ -52,7 +52,7 @@ class HelperApp():
         return self.app.post('/get', content_type='application/json',
             data=json.dumps(data))
 
-    def confirm_job(self, job_id. admin_id = None):
+    def confirm_job(self, job_id, admin_id = None):
         aid = self.admin_id
         if admin_id is not None:
             aid = admin_id
@@ -327,8 +327,6 @@ class AdministratorTests(unittest.TestCase):
             pl = json.loads(rv.data)["payload"]
             self.assertIn(pl["job_secret"], "aaabbbccc")
             self.assertNotEqual(payload, pl)
-
-            print pl
 
             job_id = json.loads(rv.data)['job_id']
             self.app.confirm_job(job_id, second_aid)

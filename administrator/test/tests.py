@@ -42,14 +42,22 @@ class HelperApp():
         return self.app.post('/add', data=json.dumps(data),
             content_type='application/json', follow_redirects=True)
 
-    def get_job(self):
-        data = {"administrator_id": self.admin_id }
+    def get_job(self, admin_id = None):
+        aid = self.admin_id
+        if admin_id is not None:
+            aid = admin_id
+
+        data = {"administrator_id": aid}
 
         return self.app.post('/get', content_type='application/json',
             data=json.dumps(data))
 
-    def confirm_job(self, job_id):
-        data = {"administrator_id": self.admin_id,
+    def confirm_job(self, job_id, admin_id = None):
+        aid = self.admin_id
+        if admin_id is not None:
+            aid = admin_id
+
+        data = {"administrator_id": aid,
                 "job_id": job_id}
 
         return self.app.post('/confirm', content_type='application/json',
@@ -81,35 +89,6 @@ class Worker(threading.Thread):
             if not self.success:
                 self.reason = rv.data
 
-class AdministratorNoSessionTests(unittest.TestCase):
-    def setUp(self):
-        self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
-        administrator.app.config['TESTING'] = True
-        administrator.app.config['TRACK_SESSION'] = False
-        administrator.app.config['PASSWORD_HASH'] = administrator.hash_password('real_password')
-        self.app = HelperApp(abc_aid)
-        administrator.init_db()
-
-    def tearDown(self):
-        os.close(self.db_fd)
-        os.unlink(administrator.app.config['DATABASE'])
-
-    def test_all_jobs_unique(self):
-        many = 25
-        self.app.add_jobs(gen_n_jobs(many), "real_password")
-        workers = [Worker(abc_aid, 1) for i in range(many)]
-        for w in workers:
-            w.start()
-
-        [w.join() for w in workers]
-
-        ids = Set()
-        for w in workers:
-            ids.add(w.job_id)
-
-        self.assertEqual(len(ids), many)
-
-
 class AdministratorTests(unittest.TestCase):
 
     """
@@ -126,7 +105,7 @@ class AdministratorTests(unittest.TestCase):
     def setUp(self):
         self.db_fd, administrator.app.config['DATABASE'] = tempfile.mkstemp()
         administrator.app.config['TESTING'] = True
-        administrator.app.config['TRACK_SESSION'] = True
+        administrator.app.config['ENFORCE_JOB_TYPES'] = True
         administrator.app.config['PASSWORD_HASH'] = administrator.hash_password('real_password')
         self.app = HelperApp(abc_aid)
         administrator.init_db()
@@ -192,6 +171,24 @@ class AdministratorTests(unittest.TestCase):
 
         self.assertEqual(json.loads(rv.data)['job_id'], job_id)
 
+    def test_confirm_job(self):
+        self.app.add_jobs(abc_jobs, "real_password")
+        
+        rv = self.app.get_job()
+        job_id = json.loads(rv.data)['job_id']
+
+        # Can confirm a job you own
+        rv = self.app.confirm_job(job_id)
+        self.assertIn("Job confirmed complete", rv.data)
+
+        # Cannot confirm same job twice
+        rv = self.app.confirm_job(job_id)
+        self.assertIn("Job confirm failed", rv.data)
+
+        # Cannot confirm a job that doesn't exist
+        rv = self.app.confirm_job('12345')
+        self.assertIn("Job confirm failed", rv.data)
+
     def test_exhaust_jobs(self):
         self.app.add_jobs(abc_jobs, "real_password")
 
@@ -238,24 +235,6 @@ class AdministratorTests(unittest.TestCase):
         job_id4 = json.loads(rv.data)['job_id']
 
         self.assertIn(job_id4, [job_id1, job_id2, job_id3])
-
-    def test_confirm_job(self):
-        self.app.add_jobs(abc_jobs, "real_password")
-        
-        rv = self.app.get_job()
-        job_id = json.loads(rv.data)['job_id']
-
-        # Can confirm a job you own
-        rv = self.app.confirm_job(job_id)
-        self.assertIn("Job confirmed complete", rv.data)
-
-        # Cannot confirm same job twice
-        rv = self.app.confirm_job(job_id)
-        self.assertIn("Job confirm failed", rv.data)
-
-        # Cannot confirm a job that doesn't exist
-        rv = self.app.confirm_job('12345')
-        self.assertIn("Job confirm failed", rv.data)
 
     def test_confirm_unowned_job(self):
         app2 = HelperApp(abc_aid)
@@ -321,47 +300,40 @@ class AdministratorTests(unittest.TestCase):
         self.assertListEqual([w.success for w in workers],
                              [True for w in workers])
 
+    def test_no_same_job_type_twice(self):
+        """
+        Test that we can't get a job of the same type, even on
+        a different administrator id
+        """
 
-    # This test became unneccesary when pending jobs became up for grabs in lieu of open
-    
-    # def test_many_workers_fail_replace(self):
-    #     many = 24 # must be even
-    #     self.app.add_jobs(gen_n_jobs(many), "real_password", timeout=10)
+        second_aid = "abc2"
 
-    #     # workers should finish quickly and on time
-    #     fast_workers = [Worker(abc_aid, 1) for i in range(many/2)]
+        app2 = HelperApp(second_aid)
 
-    #     # workers that will leave and never finish
-    #     slow_workers = [Worker(abc_aid, -1) for i in range(many/2)]
+        self.app.add_jobs(abc_jobs, "real_password")
+        app2.add_jobs(abc_jobs, "real_password")
 
-    #     for w in fast_workers + slow_workers:
-    #         w.start()
-    #     [w.join() for w in fast_workers + slow_workers]
+        rv = self.app.get_job()
+        payload = json.loads(rv.data)["payload"]
 
-    #     # workers should be rejected with no jobs available
-    #     rejected_workers = [Worker(abc_aid, 1) for i in range(many/2)]
+        self.assertIn(payload["job_secret"], "aaabbbccc")
+        
+        job_id = json.loads(rv.data)['job_id']
+        self.app.confirm_job(job_id)
 
-    #     for w in rejected_workers:
-    #         w.start()
-    #     [w.join() for w in rejected_workers]
+        # Get the two jobs that are different from first
+        for i in range(2):
+            rv = self.app.get_job(second_aid)
+            pl = json.loads(rv.data)["payload"]
+            self.assertIn(pl["job_secret"], "aaabbbccc")
+            self.assertNotEqual(payload, pl)
 
-    #     self.assertListEqual([w.success for w in fast_workers],
-    #                          [True for w in fast_workers])
-    #     self.assertListEqual([w.success for w in rejected_workers],
-    #                          [False for w in rejected_workers])
+            job_id = json.loads(rv.data)['job_id']
+            self.app.confirm_job(job_id, second_aid)
 
-    #     # wait for jobs to expire
-    #     time.sleep(10)
-
-    #     # workers should get jobs now that slow_workers have expired
-    #     replacement_workers = [Worker(abc_aid, 1) for i in range(many/2)]
-    #     for w in replacement_workers:
-    #         w.start()
-
-    #     [w.join() for w in replacement_workers]
-
-    #     self.assertListEqual([w.success for w in replacement_workers],
-    #                          [True for w in replacement_workers])
+        # Try and get a third job and fail
+        rv = self.app.get_job(second_aid)
+        self.assertIn("No jobs available", rv.data)
 
     def test_random_no_exceptions(self):
         many = 100

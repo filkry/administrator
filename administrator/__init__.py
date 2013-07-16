@@ -243,15 +243,14 @@ def confirm():
         with closing(db.cursor()) as c:
             session_name = session['user_id']
 
-            c.execute("UPDATE jobs SET status='complete' \
-                WHERE administrator_id=? and \
-                id=? and status='pending' and \
-                claimant_uuid=?", (aid, job_id, session_name))
+            c.execute("UPDATE jobs SET status='complete' WHERE id=?", (job_id,))
 
             if c.rowcount != 1:
                 return "Job confirm failed. Job does not exist, was not begun, \
                     already complete, timed out, or belongs to another user"
-    except:
+    except Exception,e:
         print "Unexpected error confirm"
+        print job_id
+        print str(e)
 
     return "Job confirmed complete"

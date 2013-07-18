@@ -113,7 +113,7 @@ def add():
         mode = request.json['mode']
         aid = request.json['administrator_id']
         insert_tuples = [(aid,
-                          hash_password(json.dumps(j)),
+                          j['job_type'] if 'job_type' in j else hash_password(json.dumps(j)),
                           json.dumps(j),
                           timeout) for j in jobs]
         db = get_db()
